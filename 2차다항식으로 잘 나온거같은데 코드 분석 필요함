@@ -1,0 +1,115 @@
+import cx_Oracle
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import PolynomialFeatures
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_absolute_error, mean_squared_error
+ 
+# Oracle 데이터베이스에 연결 (환경에 맞게 사용자명, 비밀번호, 호스트, SID 설정)
+dsn_tns = cx_Oracle.makedsn('localhost', '1521', service_name='xe')
+connection = cx_Oracle.connect(user='junbae', password='tiger', dsn=dsn_tns)
+ 
+# SQL 쿼리 실행 (컬럼명 영어로 변경)
+query = """
+SELECT
+    연도,
+    총인구,
+    성비,
+    인구성장률,
+    노인인구,
+    노령화지수,
+    일반가구,
+    세대가구,
+    독거노인수
+FROM
+    elder_data
+WHERE
+    연도 BETWEEN 2015 AND 2023
+"""
+df = pd.read_sql(query, connection)
+ 
+# 연결 종료
+connection.close()
+ 
+# 결측값 처리 (예: 결측값을 평균으로 채운다)
+df.fillna(df.mean(), inplace=True)
+ 
+# 필요한 열만 선택
+features = ['연도', '총인구', '성비', '인구성장률', '노인인구', '노령화지수', '일반가구', '세대가구']
+target = '독거노인수'
+ 
+# X (입력 변수)와 y (타겟 변수)로 나누기
+X = df[features]
+y = df[target]
+ 
+# 데이터 나누기 (훈련용과 테스트용)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+ 
+# 2차 다항 회귀 모델을 사용하기 위해 PolynomialFeatures 사용
+poly = PolynomialFeatures(degree=2)
+X_poly_train = poly.fit_transform(X_train[['연도']])  # '연도'만 다항식으로 변환
+X_poly_test = poly.transform(X_test[['연도']])
+ 
+# 2차 다항 회귀 모델
+model = LinearRegression()
+model.fit(X_poly_train, y_train)
+ 
+# 예측 수행
+y_pred = model.predict(X_poly_test)
+ 
+# 성능 평가 (MAE, MSE)
+mae = mean_absolute_error(y_test, y_pred)
+mse = mean_squared_error(y_test, y_pred)
+ 
+print(f"Mean Absolute Error: {mae}")
+print(f"Mean Squared Error: {mse}")
+ 
+# 2024년부터 2050년까지 예측을 위한 데이터 준비
+future_years = np.arange(2024, 2051)  # 2024년부터 2050년까지
+ 
+# 기존 데이터의 연도, 총인구, 성비 등 값을 사용하여 예측
+future_data = {
+    '연도': future_years,
+}
+ 
+# 2015년부터 2023년까지 데이터를 기반으로 각 특성의 평균 변화를 사용하여 예측값 계산
+# 예시로 2015년부터 2023년까지의 평균 변화율을 기반으로 2024년 이후 예측
+ 
+avg_changes = {
+    '총인구': df['총인구'].pct_change().mean(),
+    '성비': df['성비'].pct_change().mean(),
+    '인구성장률': df['인구성장률'].pct_change().mean(),
+    '노인인구': df['노인인구'].pct_change().mean(),
+    '노령화지수': df['노령화지수'].pct_change().mean(),
+    '일반가구': df['일반가구'].pct_change().mean(),
+    '세대가구': df['세대가구'].pct_change().mean(),
+}
+ 
+# 2023년 데이터를 기반으로 예측하기 위해 마지막 데이터를 사용
+last_year_data = df.iloc[-1]  # 2023년 데이터
+ 
+# 미래 데이터를 생성 (변화율을 적용하여)
+future_data['총인구'] = last_year_data['총인구'] * (1 + avg_changes['총인구']) ** (future_years - 2023)
+future_data['성비'] = last_year_data['성비'] * (1 + avg_changes['성비']) ** (future_years - 2023)
+future_data['인구성장률'] = last_year_data['인구성장률'] * (1 + avg_changes['인구성장률']) ** (future_years - 2023)
+future_data['노인인구'] = last_year_data['노인인구'] * (1 + avg_changes['노인인구']) ** (future_years - 2023)
+future_data['노령화지수'] = last_year_data['노령화지수'] * (1 + avg_changes['노령화지수']) ** (future_years - 2023)
+future_data['일반가구'] = last_year_data['일반가구'] * (1 + avg_changes['일반가구']) ** (future_years - 2023)
+future_data['세대가구'] = last_year_data['세대가구'] * (1 + avg_changes['세대가구']) ** (future_years - 2023)
+ 
+# DataFrame으로 변환
+future_df = pd.DataFrame(future_data)
+ 
+# '연도'에 대해서만 다항 회귀 예측을 수행
+future_X = poly.transform(future_df[['연도']])
+future_predictions = model.predict(future_X)
+ 
+# 예측된 독거노인수를 시각화
+plt.plot(future_years, future_predictions, label="Predicted Elderly Single-Person Households (Quadratic)")
+plt.xlabel("Year")
+plt.ylabel("Elderly Single-Person Households")
+plt.title("Prediction of Elderly Single-Person Households (2024-2050) using Quadratic Regression")
+plt.grid(True)
+plt.show()
