@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>전국 지도와 각 도의 인구수 표시</title>
+    <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=6ce631cbe82b34c8495fe11bf0e54918&libraries=services"></script>
+    <style>
+        /* 지도 크기 설정 */
+        #map {
+            width: 70%;
+            height: 400px;
+        }
+
+        /* 인구수 표시 박스 */
+        #population-info {
+            position: absolute;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 5px;
+            border-radius: 5px;
+            display: none;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <h1>전국 지도와 각 도의 인구수 표시</h1>
+
+    <div id="map"></div>
+    <div id="population-info"></div>
+
+    <script>
+        // 전국 지도 초기화
+        var mapContainer = document.getElementById('map');
+        var mapOption = {
+            center: new kakao.maps.LatLng(36.5, 127.5), // 대한민국의 대략적인 중심
+            level: 13 // 전국이 다 보이도록 확대 레벨 설정 (level 4 또는 5 추천)
+        };
+        var map = new kakao.maps.Map(mapContainer, mapOption);
+
+        // 인구수 데이터 (임의 설정)
+        var populationData = {
+            'sejong': '세종시 인구: 340,000명',
+            'jeolla': '전라도 인구: 1,800,000명',
+            'seoul': '서울특별시 인구: 9,700,000명',
+            'busan': '부산광역시 인구: 3,400,000명',
+            'gyeonggi': '경기도 인구: 13,000,000명',
+            'chungcheong': '충청도 인구: 6,000,000명',
+            'gangwon': '강원도 인구: 1,500,000명',
+            'gyeongsang': '경상도 인구: 8,500,000명',
+            'jeju': '제주도 인구: 700,000명'
+        };
+
+        // 각 도에 대한 경계 (임의로 세분화된 다각형 좌표 설정)
+        var regions = {
+            'sejong': [
+                new kakao.maps.LatLng(36.48, 127.28),
+                new kakao.maps.LatLng(36.52, 127.28),
+                new kakao.maps.LatLng(36.52, 127.32),
+                new kakao.maps.LatLng(36.48, 127.32)
+            ],
+            'jeolla': [
+                new kakao.maps.LatLng(35.7, 126.8),
+                new kakao.maps.LatLng(35.9, 126.8),
+                new kakao.maps.LatLng(35.9, 127.2),
+                new kakao.maps.LatLng(35.7, 127.2)
+            ],
+            'seoul': [
+                new kakao.maps.LatLng(37.4, 126.8),
+                new kakao.maps.LatLng(37.6, 126.8),
+                new kakao.maps.LatLng(37.6, 127.2),
+                new kakao.maps.LatLng(37.4, 127.2)
+            ],
+            'busan': [
+                new kakao.maps.LatLng(35.1, 129.0),
+                new kakao.maps.LatLng(35.3, 129.0),
+                new kakao.maps.LatLng(35.3, 129.2),
+                new kakao.maps.LatLng(35.1, 129.2)
+            ],
+            'gyeonggi': [
+                new kakao.maps.LatLng(37.3, 127.1),
+                new kakao.maps.LatLng(37.6, 127.1),
+                new kakao.maps.LatLng(37.6, 127.5),
+                new kakao.maps.LatLng(37.3, 127.5)
+            ],
+            'chungcheong': [
+                new kakao.maps.LatLng(36.0, 126.7),
+                new kakao.maps.LatLng(36.4, 126.7),
+                new kakao.maps.LatLng(36.4, 127.0),
+                new kakao.maps.LatLng(36.0, 127.0)
+            ],
+            'gangwon': [
+                new kakao.maps.LatLng(37.2, 128.0),
+                new kakao.maps.LatLng(37.5, 128.0),
+                new kakao.maps.LatLng(37.5, 128.4),
+                new kakao.maps.LatLng(37.2, 128.4)
+            ],
+            'gyeongsang': [
+                new kakao.maps.LatLng(35.8, 128.5),
+                new kakao.maps.LatLng(36.1, 128.5),
+                new kakao.maps.LatLng(36.1, 129.0),
+                new kakao.maps.LatLng(35.8, 129.0)
+            ],
+            'jeju': [
+                new kakao.maps.LatLng(33.2, 126.3),
+                new kakao.maps.LatLng(33.5, 126.3),
+                new kakao.maps.LatLng(33.5, 126.6),
+                new kakao.maps.LatLng(33.2, 126.6)
+            ]
+        };
+
+        // 인구수 표시 박스
+        var populationInfoBox = document.getElementById('population-info');
+
+        // 각 도에 대한 다각형을 지도에 추가하고 마우스 오버 이벤트 설정
+        var polygons = {}; // 다각형 객체를 저장할 변수
+
+        for (var region in regions) {
+            var polygon = new kakao.maps.Polygon({
+                path: regions[region],  // 다각형 경로
+                strokeWeight: 0,        // 테두리 두께 0으로 설정 (보이지 않게)
+                strokeColor: '#FF0000', // 테두리 색상 (사용하지 않음)
+                strokeOpacity: 0,       // 테두리 투명도
+                fillColor: '#FF0000',   // 채우기 색상
+                fillOpacity: 0.1        // 채우기 투명도
+            });
+
+            polygon.setMap(map);
+            polygons[region] = polygon; // 각 다각형을 저장
+
+            // 마우스 오버 이벤트
+            kakao.maps.event.addListener(polygon, 'mouseover', function(event) {
+                // `this`는 해당 다각형 객체를 가리킴
+                var regionName = this.regionName;  // 각 다각형에 연결된 regionName을 사용
+                populationInfoBox.style.display = 'block';
+                populationInfoBox.innerHTML = populationData[regionName];
+
+                // 마우스 커서 위치에 맞춰 인구수 표시
+                populationInfoBox.style.left = event.containerPosition.x + 10 + 'px';
+                populationInfoBox.style.top = event.containerPosition.y + 10 + 'px';
+            });
+
+            // 마우스 아웃 이벤트
+            kakao.maps.event.addListener(polygon, 'mouseout', function() {
+                populationInfoBox.style.display = 'none';
+            });
+
+            // 각 다각형 객체에 지역 이름을 추가
+            polygon.regionName = region; // regionName 속성 추가
+        }
+
+    </script>
+</body>
+</html>
